@@ -20,23 +20,16 @@ sed -r -i 's|^(.*)namespace.*|  namespace: intel-cmk|' `find ./resources/pods -n
         ```
         sed -r -i 's|^(.*)/cmk/cmk.py.*|      \- "/cmk/cmk.py cluster-init --all-hosts --saname=cmk-serviceaccount --namespace=intel-cmk --cmk-img=bastion.shift.zone:5000/cmk/cmk:v1.3.1"|' ./resources/pods/cmk-cluster-init-pod.yaml
         ```
+
     - To prepare CMK for a specific list of nodes:
         ```
         sed -r -i 's|^(.*)/cmk/cmk.py.*|      \- "/cmk/cmk.py cluster-init --host-list=node1,node2,node3 --cmk-cmd-list=init,discover --saname=cmk-serviceaccount --namespace=intel-cmk --cmk-img=bastion.shift.zone:5000/cmk/cmk:v1.3.1"|' ./resources/pods/cmk-cluster-init-pod.yaml
-
-        sed -r -i 's|^(.*)/cmk/cmk.py.*|      \- "/cmk/cmk.py cluster-init --host-list=worker-2.ocp4poc.lab.shift.zone --cmk-cmd-list=init,discover --saname=cmk-serviceaccount --namespace=intel-cmk --cmk-img=bastion.shift.zone:5000/cmk/cmk:v1.3.1"|' ./resources/pods/cmk-cluster-init-pod.yaml
         ```
 
-- Create namespace
-    ```
-    oc new-project intel-cmk
-    ```
-
-- Create ServiceAccount and RBACs
-    ```
-    oc create -f ./resources/authorization/cmk-serviceaccount.yaml
-    oc create -f ./resources/authorization/cmk-rbac-rules.yaml
-    ```
+    - To prepre CMK for a specific node:
+        ```
+        sed -r -i 's|^(.*)/cmk/cmk.py.*|      \- "/cmk/cmk.py cluster-init --host-list=worker-2.ocp4poc.lab.shift.zone --cmk-cmd-list=init,discover --saname=cmk-serviceaccount --namespace=intel-cmk --cmk-img=bastion.shift.zone:5000/cmk/cmk:v1.3.1"|' ./resources/pods/cmk-cluster-init-pod.yaml
+        ```
 
 - Build CMK container and tag with the local registry
     ```
@@ -49,16 +42,35 @@ sed -r -i 's|^(.*)namespace.*|  namespace: intel-cmk|' `find ./resources/pods -n
     ```
 
 
-## Create Service Account and Deploy
+## Create Namespace, Service Account and Deploy
+
+- Create namespace
+    ```
+    oc new-project intel-cmk
+    ```
 
 - Create ServiceAccount and assign required RBACs and Privileges
     ```
     oc create serviceaccount cmk-serviceaccount -n intel-cmk
+    ```
 
+-  Update and apply RBACs
+    ```
+    sed -r -i.bak "s|^(.*)namespace.*|  namespace: intel-cmk|g" ./resources/authorization/cmk-rbac-rules.yaml
+    ```
+
+- Apply RBACs, Roles and SCCs
+    ```
+    oc create -f ./resources/authorization/cmk-rbac-rules.yaml
+ 
     oc adm policy add-role-to-user admin system:serviceaccount:intel-cmk:cmk-serviceaccount -n intel-cmk
+
     oc adm policy add-cluster-role-to-user view system:serviceaccount:intel-cmk:cmk-serviceaccount -n intel-cmk
+
     oc adm policy add-scc-to-user privileged -n intel-cmk -z cmk-serviceaccount
     ```
+
+
 
 - Deploy Init Pod and wait for it to complete
     ```
@@ -99,7 +111,12 @@ sed -r -i 's|^(.*)namespace.*|  namespace: intel-cmk|' `find ./resources/pods -n
 - Remove ServiceAccount, RBAC and Privileges
     ```
     oc delete serviceaccount cmk-serviceaccount -n intel-cmk
+
+    oc delete -f ./resources/authorization/cmk-rbac-rules.yaml
+
     oc adm policy remove-role-from-user admin system:serviceaccount:intel-cmk:cmk-serviceaccount -n intel-cmk
+
     oc adm policy remove-cluster-role-from-user view system:serviceaccount:intel-cmk:cmk-serviceaccount -n intel-cmk
+
     oc adm policy remove-scc-from-user privileged -n intel-cmk -z cmk-serviceaccount
     ```
